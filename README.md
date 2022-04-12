@@ -1,8 +1,8 @@
 # Samplot-ML on GCP
-This is a fork of the original Samplot-ML repository. Code has been modified to run the workflow on GCP.  
-Please follow the instruction for the [Google Lifescience Tutorial](https://snakemake.readthedocs.io/en/stable/executor_tutorial/google_lifesciences.html) to set up your environment.  
+This is a fork of the original Samplot-ML repository. Code has been modified to run the workflow on Google Cloud.  
+Please follow the instruction for the [Google Life Sciences Tutorial](https://snakemake.readthedocs.io/en/stable/executor_tutorial/google_lifesciences.html) to set up your environment.  
 Clone this repository, then amend the `samplot-ml-predict.yaml` configuration file to point at your data.  
-The process has been tested with the data files mentioned in the original repository. They can be downloaded as per instructions below.  
+The process has been tested with the data files mentioned in the original article. They can be downloaded as per instructions below.  
 The `samplot-ml-predict.smk`  file defines the workflow. Amend it as necessary. You can then run it on GCP with:  
 ```
 snakemake \ 
