@@ -49,20 +49,20 @@ svlen=$(($end-$start))
 # window=$(python -c "print(int($svlen * 0.5))")
 
 if [[ $svlen -gt 5000 ]]; then
-    samplot plot \
+    samplot.py \
         --zoom 1000 \
-        -c $chrom -s $start -e $end \
-        -q $min_mq \
-        -t DEL \
-        -b $bam \
-        -r $fasta \
-        -o $out
+        --chrom $chrom --start $start --end $end \
+        --min_mqual $min_mq \
+        --sv_type DEL \
+        --bams $bam \
+        --reference $fasta \
+        --output_file $out
 else
-    samplot plot \
-        -c $chrom -s $start -e $end \
-        -q $min_mq \
-        -t DEL \
-        -b $bam \
-        -r $fasta \
-        -o $out
+    samplot.py \
+        --chrom $chrom --start $start --end $end \
+        --min_mqual $min_mq \
+        --sv_type DEL \
+        --bams $bam \
+        --reference $fasta \
+        --output_file $out
 fi

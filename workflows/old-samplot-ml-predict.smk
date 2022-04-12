@@ -20,40 +20,33 @@ rule All:
     input:
         expand(f'{conf.outdir}/samplot-ml-results/{{sample}}-samplot-ml.vcf.gz',
                sample=conf.samples)
-    
 
-fasta_in=config["fasta"]["file"]
-fai_in=config["fai"]["file"]
 
-# This sample rule copies the reference genomes from data to output directory.
-# You can change it to download from your source, e.g. via wget or ftp.
-rule GetReference:
-    input:
-        fasta=fasta_in, #"data/GRCh38_full_analysis_set_plus_decoy_hla.fa",
-        fai=fai_in #"data/GRCh38_full_analysis_set_plus_decoy_hla.fa.fai"
+gargs = f'{conf.outdir}/bin/gargs'
+rule InstallGargs:
+    """
+    Install system appropriate binary of gargs for use in image generation rules.
+    """
     output:
-        fasta = f'{conf.outdir}/'+fasta_in.rsplit('/')[-1], #"output/GRCh38_full_analysis_set_plus_decoy_hla.fa",
-        fai = f'{conf.outdir}/'+fai_in.rsplit('/')[-1] #"output/GRCh38_full_analysis_set_plus_decoy_hla.fa.fai"
-    resources:
-        disk_mb=100000
-    run:
-        shell("cp {input.fasta} {output.fasta}")
-        shell("cp {input.fai} {output.fai}")
-    
-
-vcf_in=config["vcf"]["file"]
-
-# This sample rule copies the starting annotation file from data to output directory.
-# You can change it to download from your source, e.g. via wget or ftp.
-rule GetBaseVCF:
-    input:
-        vcf_in
-    output:
-        f'{conf.outdir}/'+vcf_in.rsplit('/')[-1]
-    #run:
-    #    shell(conf.vcf.get_cmd())
+        gargs
     shell:
-        "cp {input} {output}"
+        f'bash scripts/install_gargs.sh {gargs}'
+
+
+rule GetReference:
+    output:
+        fasta = conf.fasta.output,
+        fai = conf.fai.output
+    run:
+        shell(conf.fasta.get_cmd())
+        shell(conf.fai.get_cmd())
+
+
+rule GetBaseVCF:
+    output:
+        conf.vcf.output
+    run:
+        shell(conf.vcf.get_cmd())
 
 
 rule GetDelRegions:
@@ -66,16 +59,11 @@ rule GetDelRegions:
         f'{conf.outdir}/bed/{{sample}}-del-regions.bed'
     conda:
         'envs/samplot.yaml'
-    resources:
-        #machine_type="n1-standard-8",
-        mem_mb=4000,
-        disk_mb=10000
     shell:
         f"""
-        mkdir -p {conf.outdir}/bed
+        [[ ! -d {conf.outdir}/bed ]] && mkdir {conf.outdir}/bed
         bash scripts/get_del_regions.sh {{input}} {{wildcards.sample}} > {{output}}
         """
-    
 
 
 def get_images(rule, wildcards):
@@ -101,41 +89,30 @@ rule GenerateImages:
     input:
         # bam/ file: from config. could be a url
         # therefore will not be tracked by snakemake
+        gargs_bin = gargs,
         fasta = conf.fasta.output,
         fai = conf.fai.output,
-        regions = rules.GetDelRegions.output,
-        # samplot requires an index file for each sample. 
-        # I could not figure out how to pass both sample and index via wildcards
-        bam=config["samples"]["HG03687"], #"data/HG03687.final.cram",
-        bai=config["samples_idx"]["HG03687"] #"data/HG03687.final.cram.crai"
-        #bam = lambda wildcards: conf.alignments[wildcards.sample],
+        regions = rules.GetDelRegions.output
     output:
         directory(f'{conf.outdir}/img/{{sample}}')
     params:
-        #cannot pass the bam as a parameter - it won't be copied to the container.
-        #bam = lambda wildcards: conf.alignments[wildcards.sample]
+        bam = lambda wildcards: conf.alignments[wildcards.sample]
     conda:
         'envs/samplot.yaml'
-    resources:
-        machine_type="n1-standard-8",
-        mem_mb=30000,
-        disk_mb=100000
     shell:
         # TODO put the gen_img.sh script into a function in images_from_regions.sh
         f"""
-        wget https://github.com/brentp/gargs/releases/download/v0.3.9/gargs_linux -O ./gargs; \\
-        chmod a+x ./gargs; \\
-        mkdir -p {{output}}; \\
+        mkdir -p {conf.outdir}/img
         bash scripts/images_from_regions.sh \\
-            --gargs-bin ./gargs \\
+            --gargs-bin {{input.gargs_bin}} \\
             --fasta {{input.fasta}} \\
             --regions {{input.regions}} \\
-            --bam {{input.bam}} \\
-            --outdir {{output}} \\
+            --bam {{params.bam}} \\
+            --outdir {conf.outdir}/img/{{wildcards.sample}} \\
             --delimiter {conf.delimiter} \\
             --processes {{threads}}
         """
-    
+
 
 rule CropImages:
     """
@@ -143,28 +120,22 @@ rule CropImages:
     """
     threads: workflow.cores
     input:
-        imgs = directory(rules.GenerateImages.output)
+        gargs_bin = gargs,
+        imgs = rules.GenerateImages.output
         # imgs = functools.partial(get_images, 'GenerateImages')
     output:
         directory(f'{conf.outdir}/crop/{{sample}}')
-
-    resources:
-        machine_type="n1-standard-8",
-        mem_mb=30000,
-        disk_mb=100000
     conda:
         'envs/samplot.yaml'
     shell:
         f"""
-        wget https://github.com/brentp/gargs/releases/download/v0.3.9/gargs_linux -O ./gargs; \\
-        chmod a+x ./gargs; \\
-        mkdir -p {{output}}; \\
+        [[ ! -d {conf.outdir}/crop ]] && mkdir {conf.outdir}/crop
         bash scripts/crop.sh -i {{input.imgs}} \\
                              -o {{output}} \\
                              -p {{threads}} \\
-                             -g ./gargs
+                             -g {{input.gargs_bin}}
         """
-    
+
 rule CreateImageList:
     """
     Samplot-ml needs list of input images. This rule takes the list
@@ -172,16 +143,14 @@ rule CreateImageList:
     """
     input:
         #functools.partial(get_images, 'CropImages')
-        directory(rules.CropImages.output)
+        rules.CropImages.output
     output:
-        f'{conf.outdir}/{{sample}}-cropped-imgs.txt'
-    shell:
-        "ls {input}/*.png > {output}"
-    #run:
-    #    with open(output[0], 'w') as out:
+        temp(f'{conf.outdir}/{{sample}}-cropped-imgs.txt')
+    run:
+        with open(output[0], 'w') as out:
             # for image_file in input:
-    #        for image_file in glob(f'{conf.outdir}/crop/{wildcards.sample}/*.png'):
-    #            out.write(f'{image_file}\n')
+            for image_file in glob(f'{conf.outdir}/crop/{wildcards.sample}/*.png'):
+                out.write(f'{image_file}\n')
 
 
 rule PredictImages:
@@ -195,10 +164,6 @@ rule PredictImages:
         f'{conf.outdir}/{{sample}}-cropped-imgs.txt'
     output:
         f'{conf.outdir}/{{sample}}-predictions.bed'
-    resources:
-        machine_type="n1-standard-8",
-        mem_mb=30000,
-        disk_mb=100000
     conda:
         'envs/tensorflow.yaml'
     shell:
@@ -211,7 +176,6 @@ rule PredictImages:
             --model-path saved_models/samplot-ml.h5 \\
         > {output}
         """
-    
 
 
 rule AnnotateVCF:
@@ -220,16 +184,17 @@ rule AnnotateVCF:
         bed = f'{conf.outdir}/{{sample}}-predictions.bed'
     output:
         f'{conf.outdir}/samplot-ml-results/{{sample}}-samplot-ml.vcf.gz'
-    resources:
-        #machine_type="n1-standard-8",
-        mem_mb=30000,
-        disk_mb=100000
     conda:
         'envs/samplot.yaml'
     shell:
         """
+        [[ ! -d {conf.outdir}/samplot-ml-results ]] && mkdir {conf.outdir}/samplot-ml-results
         bcftools view -s {wildcards.sample} {input.vcf} |
         python scripts/annotate.py {input.bed} {wildcards.sample} |
         bgzip -c > {output}
         """
         
+
+
+
+

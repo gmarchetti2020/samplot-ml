@@ -1,3 +1,21 @@
+# Samplot-ML on GCP
+This is a fork of the original Samplot-ML repository. Code has been modified to run the workflow on GCP.  
+Please follow the instruction for the [Google Lifescience Tutorial](https://snakemake.readthedocs.io/en/stable/executor_tutorial/google_lifesciences.html) to set up your environment.  
+Clone this repository, then amend the `samplot-ml-predict.yaml` configuration file to point at your data.  
+The process has been tested with the data files mentioned in the original repository. They can be downloaded as per instructions below.  
+The `samplot-ml-predict.smk`  file defines the workflow. Amend it as necessary. You can then run it on GCP with:  
+```
+snakemake \ 
+--google-lifesciences \
+--google-lifesciences-region us-central1 \
+--default-remote-prefix <bucket name> \
+--use-conda \
+--jobs 4 \
+--cores 8 \
+--latency-wait 60 \
+-s samplot-ml-predict.smk 
+```
+
 # Samplot-ML
 [![DOI](https://zenodo.org/badge/191653284.svg)](https://zenodo.org/badge/latestdoi/191653284)
 

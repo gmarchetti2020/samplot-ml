@@ -85,7 +85,7 @@ class DataWriter:
         Most images we have are 3 channel, but there are some that are 1/4 channels,
         so we just make all 3 channel then normalize to 0-1 range.
         """
-        image = tf.io.read_file("gs://"+path) # added gs:// so it reads from GCS
+        image = tf.io.read_file(path)
         image = tf.image.decode_png(image, channels=3)
         image = tf.image.convert_image_dtype(image, tf.float32)
         image = tf.image.resize(image, IMAGE_SHAPE[:2])

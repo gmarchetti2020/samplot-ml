@@ -35,7 +35,7 @@ while (( "$#" )); do
     esac
 done
 
-#[[ ! -d $outdir ]] && mkdir $outdir
+[[ ! -d $outdir ]] && mkdir $outdir
 
 # format of regions bed is:
 # chrom start end svtype sample
